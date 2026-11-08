@@ -1,0 +1,110 @@
+### Pruebas del backend con la extensión "REST Client" de VS Code
+### (haz clic en "Send Request" sobre cada bloque)
+
+@url = http://localhost:3001
+
+### 1) Login de admin (copia el token que devuelve y pégalo abajo en @token)
+POST {{url}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@perfumeria.com",
+  "password": "MiClaveSegura123"
+}
+
+###
+@token = PEGA_AQUI_EL_TOKEN
+
+### 2) Crear perfume (admin)
+POST {{url}}/admin/perfumes
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "nombre": "Sauvage",
+  "marca": "Dior",
+  "genero": "Hombre",
+  "volumenMl": 100,
+  "precio": 95000,
+  "stock": 10,
+  "descripcion": "Fragancia fresca y especiada",
+  "imagenUrl": ""
+}
+
+### 3) Catálogo público
+GET {{url}}/perfumes
+
+### 4) Editar perfume (reemplaza ID por el _id real)
+PUT {{url}}/admin/perfumes/ID
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "nombre": "Sauvage",
+  "marca": "Dior",
+  "genero": "Hombre",
+  "volumenMl": 100,
+  "precio": 99000,
+  "stock": 10,
+  "descripcion": "Fragancia fresca y especiada",
+  "imagenUrl": ""
+}
+
+### 5) Crear pedido (cliente) - reemplaza perfumeId por un _id real
+POST {{url}}/pedidos
+Content-Type: application/json
+
+{
+  "cliente": {
+    "nombre": "Ana Pérez",
+    "telefono": "+56 9 1234 5678",
+    "direccion": "Av. Siempre Viva 123",
+    "ciudad": "Santiago"
+  },
+  "items": [
+    { "perfumeId": "ID_DEL_PERFUME", "cantidad": 2 }
+  ],
+  "metodoPago": "transferencia"
+}
+
+### 6) Pedir más stock del que hay (debe responder 409)
+POST {{url}}/pedidos
+Content-Type: application/json
+
+{
+  "cliente": {
+    "nombre": "Ana Pérez",
+    "telefono": "+56 9 1234 5678",
+    "direccion": "Av. Siempre Viva 123",
+    "ciudad": "Santiago"
+  },
+  "items": [
+    { "perfumeId": "ID_DEL_PERFUME", "cantidad": 999 }
+  ],
+  "metodoPago": "transferencia"
+}
+
+### 7) Listar pedidos (admin)
+GET {{url}}/admin/pedidos
+Authorization: Bearer {{token}}
+
+### 8) Cambiar estado (Pendiente -> Pagado -> Enviado)
+PUT {{url}}/admin/pedidos/ID_DEL_PEDIDO/estado
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "estado": "Pagado" }
+
+### 9) Saltarse el flujo (Pendiente -> Enviado) debe responder 409
+PUT {{url}}/admin/pedidos/ID_DEL_PEDIDO/estado
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "estado": "Enviado" }
+
+### 10) Baja lógica de un perfume (admin)
+DELETE {{url}}/admin/perfumes/ID_DEL_PERFUME
+Authorization: Bearer {{token}}
+
+### 11) Sin token debe responder 401
+GET {{url}}/admin/pedidos

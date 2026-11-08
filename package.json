@@ -1,0 +1,30 @@
+{
+  "name": "perfumeria-backend",
+  "version": "1.0.0",
+  "description": "Backend SOA (conexion -> dto -> negocio -> servicio) en TypeScript + Express + MongoDB",
+  "main": "dist/servicio/server.js",
+  "scripts": {
+    "dev": "ts-node src/servicio/server.ts",
+    "build": "tsc",
+    "start": "node dist/servicio/server.js",
+    "crear-admin": "ts-node src/scripts/crearAdmin.ts",
+    "test:e2e": "ts-node src/scripts/e2e.ts"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.5.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.11.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
+  }
+}
