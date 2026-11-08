@@ -1,110 +1,217 @@
-### Pruebas del backend con la extensión "REST Client" de VS Code
-### (haz clic en "Send Request" sobre cada bloque)
+### Pruebas End-to-End con la extensión "REST Client" de VS Code
+### Ejecuta los bloques EN ORDEN (clic en "Send Request" sobre cada uno).
+### El token y los IDs se capturan solos: no hay que copiar nada a mano.
+### Requisito: el servidor corriendo (npm run dev) y el admin creado (npm run crear-admin).
 
 @url = http://localhost:3001
+@email = admin@perfumeria.com
+@password = MiClaveSegura123
 
-### 1) Login de admin (copia el token que devuelve y pégalo abajo en @token)
+### ============ 0) SEGURIDAD ============
+
+### 0.1) Sin token -> debe responder 401
+GET {{url}}/admin/pedidos
+
+### 0.2) Credenciales incorrectas -> debe responder 401
 POST {{url}}/auth/login
 Content-Type: application/json
 
 {
-  "email": "admin@perfumeria.com",
-  "password": "MiClaveSegura123"
+  "email": "{{email}}",
+  "password": "clave-incorrecta"
+}
+
+### ============ 1) LOGIN ============
+
+# @name login
+POST {{url}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
 }
 
 ###
-@token = PEGA_AQUI_EL_TOKEN
+@token = {{login.response.body.token}}
 
-### 2) Crear perfume (admin)
+### ============ 2) PERFUMES (RF-01 / RF-03) ============
+
+### 2.1) Validación: precio negativo -> debe responder 400
 POST {{url}}/admin/perfumes
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-  "nombre": "Sauvage",
+  "nombre": "Invalido",
+  "marca": "Prueba",
+  "genero": "Unisex",
+  "volumenMl": 50,
+  "precio": -5,
+  "stock": 1
+}
+
+### 2.2) Crear perfume (stock 5) -> 201
+# @name crearPerfume
+POST {{url}}/admin/perfumes
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "nombre": "E2E Sauvage",
   "marca": "Dior",
   "genero": "Hombre",
   "volumenMl": 100,
   "precio": 95000,
-  "stock": 10,
-  "descripcion": "Fragancia fresca y especiada",
+  "stock": 5,
+  "descripcion": "Perfume de prueba end-to-end",
   "imagenUrl": ""
 }
 
-### 3) Catálogo público
+###
+@perfumeId = {{crearPerfume.response.body._id}}
+
+### 2.3) Catálogo público: debe aparecer "E2E Sauvage"
 GET {{url}}/perfumes
 
-### 4) Editar perfume (reemplaza ID por el _id real)
-PUT {{url}}/admin/perfumes/ID
+### 2.4) Detalle público
+GET {{url}}/perfumes/{{perfumeId}}
+
+### 2.5) Editar precio -> 200
+PUT {{url}}/admin/perfumes/{{perfumeId}}
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-  "nombre": "Sauvage",
+  "nombre": "E2E Sauvage",
   "marca": "Dior",
   "genero": "Hombre",
   "volumenMl": 100,
   "precio": 99000,
-  "stock": 10,
-  "descripcion": "Fragancia fresca y especiada",
+  "stock": 5,
+  "descripcion": "Perfume de prueba end-to-end",
   "imagenUrl": ""
 }
 
-### 5) Crear pedido (cliente) - reemplaza perfumeId por un _id real
+### ============ 3) PEDIDOS (RF-04 / RF-05 / RF-02) ============
+
+### 3.1) Pedido sin datos de envío -> debe responder 400
+POST {{url}}/pedidos
+Content-Type: application/json
+
+{
+  "cliente": { "nombre": "E2E Test" },
+  "items": [ { "perfumeId": "{{perfumeId}}", "cantidad": 1 } ],
+  "metodoPago": "transferencia"
+}
+
+### 3.2) Pedido correcto de 2 unidades -> 201, total = 2 x 99000, estado Pendiente
+# @name crearPedido
 POST {{url}}/pedidos
 Content-Type: application/json
 
 {
   "cliente": {
-    "nombre": "Ana Pérez",
+    "nombre": "E2E Test",
     "telefono": "+56 9 1234 5678",
     "direccion": "Av. Siempre Viva 123",
     "ciudad": "Santiago"
   },
-  "items": [
-    { "perfumeId": "ID_DEL_PERFUME", "cantidad": 2 }
-  ],
+  "items": [ { "perfumeId": "{{perfumeId}}", "cantidad": 2 } ],
   "metodoPago": "transferencia"
 }
 
-### 6) Pedir más stock del que hay (debe responder 409)
+###
+@pedidoId = {{crearPedido.response.body.pedido._id}}
+
+### 3.3) El stock debe haber bajado de 5 a 3
+GET {{url}}/perfumes/{{perfumeId}}
+
+### 3.4) Pedir más de lo que hay (4 > 3) -> debe responder 409 y el stock sigue en 3
 POST {{url}}/pedidos
 Content-Type: application/json
 
 {
   "cliente": {
-    "nombre": "Ana Pérez",
+    "nombre": "E2E Test",
     "telefono": "+56 9 1234 5678",
     "direccion": "Av. Siempre Viva 123",
     "ciudad": "Santiago"
   },
-  "items": [
-    { "perfumeId": "ID_DEL_PERFUME", "cantidad": 999 }
-  ],
+  "items": [ { "perfumeId": "{{perfumeId}}", "cantidad": 4 } ],
   "metodoPago": "transferencia"
 }
 
-### 7) Listar pedidos (admin)
+### 3.5) Identificador inválido -> debe responder 400
+POST {{url}}/pedidos
+Content-Type: application/json
+
+{
+  "cliente": {
+    "nombre": "E2E Test",
+    "telefono": "+56 9 1234 5678",
+    "direccion": "Av. Siempre Viva 123",
+    "ciudad": "Santiago"
+  },
+  "items": [ { "perfumeId": "esto-no-es-un-id", "cantidad": 1 } ],
+  "metodoPago": "transferencia"
+}
+
+### ============ 4) PANEL DE PEDIDOS (RF-06) ============
+
+### 4.1) Listar pedidos (admin)
 GET {{url}}/admin/pedidos
 Authorization: Bearer {{token}}
 
-### 8) Cambiar estado (Pendiente -> Pagado -> Enviado)
-PUT {{url}}/admin/pedidos/ID_DEL_PEDIDO/estado
-Content-Type: application/json
-Authorization: Bearer {{token}}
-
-{ "estado": "Pagado" }
-
-### 9) Saltarse el flujo (Pendiente -> Enviado) debe responder 409
-PUT {{url}}/admin/pedidos/ID_DEL_PEDIDO/estado
+### 4.2) Saltarse el flujo (Pendiente -> Enviado) -> debe responder 409
+PUT {{url}}/admin/pedidos/{{pedidoId}}/estado
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 { "estado": "Enviado" }
 
-### 10) Baja lógica de un perfume (admin)
-DELETE {{url}}/admin/perfumes/ID_DEL_PERFUME
+### 4.3) Pendiente -> Pagado -> 200
+PUT {{url}}/admin/pedidos/{{pedidoId}}/estado
+Content-Type: application/json
 Authorization: Bearer {{token}}
 
-### 11) Sin token debe responder 401
-GET {{url}}/admin/pedidos
+{ "estado": "Pagado" }
+
+### 4.4) Pagado -> Enviado -> 200
+PUT {{url}}/admin/pedidos/{{pedidoId}}/estado
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "estado": "Enviado" }
+
+### 4.5) Filtrar por estado Enviado: debe incluir el pedido de prueba
+GET {{url}}/admin/pedidos?estado=Enviado
+Authorization: Bearer {{token}}
+
+### ============ 5) BAJA LÓGICA ============
+
+### 5.1) Dar de baja el perfume -> 200
+DELETE {{url}}/admin/perfumes/{{perfumeId}}
+Authorization: Bearer {{token}}
+
+### 5.2) Ya no está en el catálogo público -> debe responder 404
+GET {{url}}/perfumes/{{perfumeId}}
+
+### 5.3) Pero el pedido histórico conserva nombre y precio
+GET {{url}}/admin/pedidos/{{pedidoId}}
+Authorization: Bearer {{token}}
+
+### 5.4) Pedir un perfume dado de baja -> debe responder 409
+POST {{url}}/pedidos
+Content-Type: application/json
+
+{
+  "cliente": {
+    "nombre": "E2E Test",
+    "telefono": "+56 9 1234 5678",
+    "direccion": "Av. Siempre Viva 123",
+    "ciudad": "Santiago"
+  },
+  "items": [ { "perfumeId": "{{perfumeId}}", "cantidad": 1 } ],
+  "metodoPago": "transferencia"
+}

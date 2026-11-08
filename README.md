@@ -59,6 +59,22 @@
   conservan su nombre y precio.
 - **Validaciones:** viven en la capa de negocio; el servicio solo traduce los errores a códigos HTTP.
 
+## Pruebas End-to-End
+
+Hay dos formas de probar el sistema con peticiones HTTP reales (el servidor debe estar corriendo
+con `npm run dev` y el admin creado):
+
+1. **Manual, con `pruebas.http`** (extensión REST Client de VS Code): ejecuta los bloques en orden.
+   El token y los IDs se capturan solos. Cada bloque indica en su título qué respuesta esperar.
+2. **Automática, con el script E2E**:
+   ```bash
+   npm run test:e2e -- admin@perfumeria.com MiClaveSegura123
+   ```
+   Verifica seguridad (401), validaciones (400), descuento de stock, rechazo por stock insuficiente (409),
+   dos compras simultáneas del último frasco, flujo de estados, baja lógica y que el pedido histórico
+   conserve nombre y precio. Al final borra solo los perfumes y pedidos de prueba que él mismo creó.
+   Termina con código de salida 1 si algo falla.
+
 ## Pendiente / siguientes pasos
 
 - Un pedido Pendiente que nunca se paga mantiene el stock reservado. Si el proyecto lo pide, se puede
