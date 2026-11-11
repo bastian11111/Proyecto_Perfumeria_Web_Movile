@@ -13,7 +13,8 @@ export type Ruta =
     | { nombre: "adminPerfumes" }
     | { nombre: "adminPerfumeForm"; perfume?: Perfume }
     | { nombre: "adminPedidos" }
-    | { nombre: "adminPedidoDetalle"; pedidoId: string };
+    | { nombre: "adminPedidoDetalle"; pedidoId: string }
+    | { nombre: "adminReporte" };
 
 export interface ValorNavegacion {
     ir: (ruta: Ruta) => void;

@@ -8,6 +8,7 @@ import cors from "cors";
 import { PerfumeNegocio } from "../negocio/PerfumeNegocio";
 import { PedidoNegocio } from "../negocio/PedidoNegocio";
 import { AuthNegocio } from "../negocio/AuthNegocio";
+import { ReporteNegocio } from "../negocio/ReporteNegocio";
 import { ErrorNegocio } from "../negocio/ErrorNegocio";
 
 const app = express();
@@ -17,6 +18,7 @@ app.use(express.json());
 const perfumes = new PerfumeNegocio();
 const pedidos = new PedidoNegocio();
 const auth = new AuthNegocio();
+const reportes = new ReporteNegocio();
 
 // Envuelve un handler async para que cualquier error llegue al manejador central
 const ruta =
@@ -95,6 +97,16 @@ app.get("/admin/pedidos/:id", requiereAdmin, ruta(async (req, res) => {
 app.put("/admin/pedidos/:id/estado", requiereAdmin, ruta(async (req, res) => {
     await pedidos.cambiarEstado(req.params.id, req.body.estado);
     res.json({ mensaje: "Estado actualizado correctamente" });
+}));
+
+// ---------- Admin: reporte de ventas ----------
+// GET /admin/reportes/ventas?desde=2026-11-01&hasta=2026-11-30&umbralStock=5 (todos los parámetros son opcionales)
+app.get("/admin/reportes/ventas", requiereAdmin, ruta(async (req, res) => {
+    const leer = (valor: unknown): string | undefined =>
+        typeof valor === "string" && valor !== "" ? valor : undefined;
+    res.json(
+        await reportes.ventas(leer(req.query.desde), leer(req.query.hasta), leer(req.query.umbralStock))
+    );
 }));
 
 // ---------- Manejo central de errores ----------

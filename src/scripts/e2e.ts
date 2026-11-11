@@ -102,6 +102,8 @@ async function pedir(perfumeId: string, cantidad: number, cliente: unknown = cli
 }
 
 async function ejecutar(): Promise<void> {
+    // Los pedidos de esta corrida se identifican porque son posteriores a este instante
+    const inicioCorrida = new Date().toISOString();
     // ---------- Seguridad ----------
     console.log("\n[Seguridad]");
     let r = await llamar("GET", "/admin/pedidos");
@@ -204,6 +206,117 @@ async function ejecutar(): Promise<void> {
     comprobar(
         "El filtro por estado Enviado incluye el pedido",
         r.estado === 200 && Array.isArray(r.datos) && r.datos.some((p: any) => p._id === pedidoId)
+    );
+
+    // ---------- Cancelación ----------
+    console.log("\n[Cancelación: repone el stock]");
+    r = await llamar("PUT", `/admin/pedidos/${pedidoId}/estado`, { estado: "Cancelado" }, token);
+    comprobar("Un pedido Enviado no se puede cancelar (409)", r.estado === 409, `estado ${r.estado}`);
+
+    r = await crearPerfume(token, "Cancelable", 4, 60000);
+    const cancelableId: string = r.datos?._id;
+    if (cancelableId) {
+        r = await pedir(cancelableId, 3);
+        const pedidoCancelable: string = r.datos?.pedido?._id;
+
+        r = await llamar("GET", `/perfumes/${cancelableId}`);
+        comprobar("Tras pedir 3 unidades el stock es 1", r.datos?.stock === 1, `stock ${r.datos?.stock}`);
+
+        r = await llamar("PUT", `/admin/pedidos/${pedidoCancelable}/estado`, { estado: "Cancelado" }, token);
+        comprobar("Cancelar un pedido Pendiente responde 200", r.estado === 200, `estado ${r.estado}`);
+
+        r = await llamar("GET", `/perfumes/${cancelableId}`);
+        comprobar("El stock vuelve a 4", r.datos?.stock === 4, `stock ${r.datos?.stock}`);
+
+        r = await llamar("PUT", `/admin/pedidos/${pedidoCancelable}/estado`, { estado: "Cancelado" }, token);
+        comprobar("Cancelar otra vez responde 409", r.estado === 409, `estado ${r.estado}`);
+
+        r = await llamar("GET", `/perfumes/${cancelableId}`);
+        comprobar("El stock sigue en 4 (no se repuso dos veces)", r.datos?.stock === 4, `stock ${r.datos?.stock}`);
+
+        r = await llamar("PUT", `/admin/pedidos/${pedidoCancelable}/estado`, { estado: "Pagado" }, token);
+        comprobar("Un pedido Cancelado no puede reactivarse (409)", r.estado === 409, `estado ${r.estado}`);
+
+        r = await llamar("GET", "/admin/pedidos?estado=Cancelado", undefined, token);
+        comprobar(
+            "El filtro por estado Cancelado incluye el pedido",
+            r.estado === 200 && Array.isArray(r.datos) && r.datos.some((p: any) => p._id === pedidoCancelable)
+        );
+
+        // Dos cancelaciones simultáneas del mismo pedido: una gana y el stock se repone una sola vez
+        r = await pedir(cancelableId, 2);
+        const pedidoDoble: string = r.datos?.pedido?._id;
+        const [c1, c2] = await Promise.all([
+            llamar("PUT", `/admin/pedidos/${pedidoDoble}/estado`, { estado: "Cancelado" }, token),
+            llamar("PUT", `/admin/pedidos/${pedidoDoble}/estado`, { estado: "Cancelado" }, token)
+        ]);
+        const resultados = [c1.estado, c2.estado].sort();
+        comprobar(
+            "Dos cancelaciones simultáneas: una gana (200) y otra falla (409)",
+            resultados[0] === 200 && resultados[1] === 409,
+            `estados ${resultados.join(", ")}`
+        );
+        r = await llamar("GET", `/perfumes/${cancelableId}`);
+        comprobar("El stock final es 4 (se repuso una sola vez)", r.datos?.stock === 4, `stock ${r.datos?.stock}`);
+    } else {
+        comprobar("Crear perfume para la prueba de cancelación", false, `estado ${r.estado}`);
+    }
+
+    // ---------- Reporte de ventas ----------
+    console.log("\n[Reporte de ventas]");
+    r = await llamar("GET", "/admin/reportes/ventas");
+    comprobar("Sin token, el reporte responde 401", r.estado === 401, `estado ${r.estado}`);
+
+    r = await llamar("GET", "/admin/reportes/ventas?desde=no-es-una-fecha", undefined, token);
+    comprobar("Una fecha inválida responde 400", r.estado === 400, `estado ${r.estado}`);
+
+    r = await llamar("GET", "/admin/reportes/ventas?umbralStock=-3", undefined, token);
+    comprobar("Un umbral de stock inválido responde 400", r.estado === 400, `estado ${r.estado}`);
+
+    r = await llamar(
+        "GET",
+        `/admin/reportes/ventas?desde=${encodeURIComponent(inicioCorrida)}`,
+        undefined,
+        token
+    );
+    const rep = r.datos;
+    comprobar("El reporte responde 200", r.estado === 200 && !!rep, `estado ${r.estado}`);
+    if (rep) {
+        comprobar("Cuenta 4 pedidos desde el inicio de la prueba", rep.totalPedidos === 4, `total ${rep.totalPedidos}`);
+        comprobar(
+            "Por estado: 1 Enviado, 1 Pendiente y 2 Cancelados",
+            rep.pedidosPorEstado?.Enviado === 1 &&
+                rep.pedidosPorEstado?.Pendiente === 1 &&
+                rep.pedidosPorEstado?.Cancelado === 2 &&
+                rep.pedidosPorEstado?.Pagado === 0,
+            JSON.stringify(rep.pedidosPorEstado)
+        );
+        comprobar("Ventas confirmadas = 198000", rep.ventasConfirmadas === 198000, `valor ${rep.ventasConfirmadas}`);
+        comprobar("Ventas pendientes = 50000", rep.ventasPendientes === 50000, `valor ${rep.ventasPendientes}`);
+        comprobar("Monto cancelado = 300000", rep.montoCancelado === 300000, `valor ${rep.montoCancelado}`);
+        comprobar("Ticket promedio = 198000", rep.ticketPromedio === 198000, `valor ${rep.ticketPromedio}`);
+        comprobar(
+            "El más vendido es el perfume principal (2 unidades, solo ventas confirmadas)",
+            rep.perfumesMasVendidos?.length === 1 &&
+                rep.perfumesMasVendidos[0].perfumeId === perfumeId &&
+                rep.perfumesMasVendidos[0].unidades === 2,
+            JSON.stringify(rep.perfumesMasVendidos)
+        );
+        comprobar("El umbral de stock por defecto es 5", rep.umbralStock === 5, `umbral ${rep.umbralStock}`);
+    }
+
+    // Con umbral 0 solo aparecen los perfumes sin stock (el último frasco vendido), no los de stock 3 o 4
+    r = await llamar("GET", "/admin/reportes/ventas?umbralStock=0", undefined, token);
+    const idsAgotados: string[] = Array.isArray(r.datos?.stockBajo)
+        ? r.datos.stockBajo.map((p: any) => p.perfumeId)
+        : [];
+    comprobar(
+        "Stock bajo con umbral 0 incluye el perfume agotado y excluye los que aún tienen stock",
+        r.estado === 200 &&
+            idsAgotados.includes(ultimoId) &&
+            !idsAgotados.includes(perfumeId) &&
+            !idsAgotados.includes(cancelableId),
+        idsAgotados.join(", ")
     );
 
     // ---------- Baja lógica ----------

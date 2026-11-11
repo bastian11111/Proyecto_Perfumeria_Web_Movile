@@ -43,7 +43,7 @@ export interface PedidoCreado {
     fechaCreacion: string;
 }
 
-export type EstadoPedido = "Pendiente" | "Pagado" | "Enviado";
+export type EstadoPedido = "Pendiente" | "Pagado" | "Enviado" | "Cancelado";
 
 // Datos que el administrador envía al crear o editar un perfume
 export interface DatosPerfume {
@@ -55,4 +55,32 @@ export interface DatosPerfume {
     stock: number;
     descripcion: string;
     imagenUrl: string;
+}
+
+export interface PerfumeVendido {
+    perfumeId: string;
+    nombre: string;
+    unidades: number;
+    ingresos: number;
+}
+
+export interface PerfumeStockBajo {
+    perfumeId: string;
+    nombre: string;
+    marca: string;
+    stock: number;
+}
+
+// Respuesta de GET /admin/reportes/ventas
+export interface ReporteVentas {
+    periodo: { desde: string | null; hasta: string | null };
+    totalPedidos: number;
+    pedidosPorEstado: Record<EstadoPedido, number>;
+    ventasConfirmadas: number;
+    ventasPendientes: number;
+    montoCancelado: number;
+    ticketPromedio: number;
+    perfumesMasVendidos: PerfumeVendido[];
+    stockBajo: PerfumeStockBajo[];
+    umbralStock: number;
 }

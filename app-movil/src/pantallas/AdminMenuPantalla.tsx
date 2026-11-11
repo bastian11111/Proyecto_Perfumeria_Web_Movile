@@ -42,6 +42,11 @@ export function AdminMenuPantalla() {
                     descripcion="Ver las órdenes y actualizar su estado"
                     onPress={() => ir({ nombre: "adminPedidos" })}
                 />
+                <Opcion
+                    titulo="Reporte de ventas"
+                    descripcion="Ventas, perfumes más vendidos y alertas de stock"
+                    onPress={() => ir({ nombre: "adminReporte" })}
+                />
                 <View style={{ height: 16 }} />
                 <Boton
                     texto="Cerrar sesión"

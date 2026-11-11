@@ -1,5 +1,5 @@
 // Servicios del panel de administración (todas las rutas /admin requieren token).
-import { DatosPerfume, EstadoPedido, PedidoCreado, Perfume } from "../modelos";
+import { DatosPerfume, EstadoPedido, PedidoCreado, Perfume, ReporteVentas } from "../modelos";
 import { pedirJson } from "./http";
 
 interface Mensaje {
@@ -39,6 +39,16 @@ export const AdminServicio = {
 
     obtenerPedido: (token: string, id: string) =>
         pedirJson<PedidoCreado>(`/admin/pedidos/${id}`, { token }),
+
+    // ----- Reporte de ventas -----
+    // desde: fecha ISO opcional (si no se indica, considera todos los pedidos)
+    reporteVentas: (token: string, desde?: string) =>
+        pedirJson<ReporteVentas>(
+            desde
+                ? `/admin/reportes/ventas?desde=${encodeURIComponent(desde)}`
+                : "/admin/reportes/ventas",
+            { token }
+        ),
 
     cambiarEstado: (token: string, id: string, estado: EstadoPedido) =>
         pedirJson<Mensaje>(`/admin/pedidos/${id}/estado`, {

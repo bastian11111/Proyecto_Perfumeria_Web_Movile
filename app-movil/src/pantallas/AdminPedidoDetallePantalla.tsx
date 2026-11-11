@@ -1,4 +1,4 @@
-// RF-06 (admin): detalle de un pedido y cambio de estado (Pendiente -> Pagado -> Enviado)
+// RF-06 (admin): detalle de un pedido, cambio de estado (Pendiente -> Pagado -> Enviado) y cancelación
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { BarraInferior } from "../componentes/BarraInferior";
@@ -22,8 +22,12 @@ import {
 const SIGUIENTE: Record<EstadoPedido, EstadoPedido | null> = {
     Pendiente: "Pagado",
     Pagado: "Enviado",
-    Enviado: null
+    Enviado: null,
+    Cancelado: null
 };
+
+// Se puede cancelar mientras el pedido no haya sido enviado
+const CANCELABLES: EstadoPedido[] = ["Pendiente", "Pagado"];
 
 export function AdminPedidoDetallePantalla({ pedidoId }: { pedidoId: string }) {
     const { tokenActual, manejarSesionVencida } = useSesionAdmin();
@@ -49,22 +53,32 @@ export function AdminPedidoDetallePantalla({ pedidoId }: { pedidoId: string }) {
         cargar();
     }, [cargar]);
 
-    const siguiente = pedido ? SIGUIENTE[pedido.estado as EstadoPedido] ?? null : null;
+    const estadoActual = pedido ? (pedido.estado as EstadoPedido) : null;
+    const siguiente = estadoActual ? SIGUIENTE[estadoActual] ?? null : null;
+    const puedeCancelar = estadoActual ? CANCELABLES.includes(estadoActual) : false;
 
-    const avanzar = () => {
-        if (!pedido || !siguiente) return;
+    const confirmarCambio = (nuevo: EstadoPedido) => {
+        if (!pedido) return;
+        const cancelando = nuevo === "Cancelado";
+        const codigo = codigoPedido(pedido._id);
+
         Alert.alert(
-            "Cambiar estado",
-            `El pedido #${codigoPedido(pedido._id)} pasará de "${pedido.estado}" a "${siguiente}". Este paso no se puede deshacer.`,
+            cancelando ? "Cancelar pedido" : "Cambiar estado",
+            cancelando
+                ? `El pedido #${codigo} se cancelará y el stock de sus productos volverá al inventario. Este paso no se puede deshacer.`
+                : `El pedido #${codigo} pasará de "${pedido.estado}" a "${nuevo}". Este paso no se puede deshacer.`,
             [
-                { text: "Cancelar", style: "cancel" },
+                { text: cancelando ? "Volver" : "Cancelar", style: "cancel" },
                 {
-                    text: "Confirmar",
+                    text: cancelando ? "Cancelar pedido" : "Confirmar",
+                    style: cancelando ? "destructive" : "default",
                     onPress: async () => {
                         setActualizando(true);
                         try {
-                            await AdminServicio.cambiarEstado(tokenActual, pedido._id, siguiente);
-                            avisar(`Estado actualizado: ${siguiente}`);
+                            await AdminServicio.cambiarEstado(tokenActual, pedido._id, nuevo);
+                            avisar(
+                                cancelando ? "Pedido cancelado y stock repuesto" : `Estado actualizado: ${nuevo}`
+                            );
                             await cargar();
                         } catch (e) {
                             if (!manejarSesionVencida(e)) {
@@ -157,13 +171,27 @@ export function AdminPedidoDetallePantalla({ pedidoId }: { pedidoId: string }) {
                         {siguiente ? (
                             <Boton
                                 texto={`Marcar como ${siguiente}`}
-                                onPress={avanzar}
+                                onPress={() => confirmarCambio(siguiente)}
                                 cargando={actualizando}
                             />
+                        ) : estadoActual === "Cancelado" ? (
+                            <Text style={estilos.cancelado}>
+                                Pedido cancelado: el stock volvió al inventario.
+                            </Text>
                         ) : (
                             <Text style={estilos.completo}>
                                 Pedido enviado: no quedan más pasos.
                             </Text>
+                        )}
+                        {puedeCancelar && (
+                            <View style={{ marginTop: 8 }}>
+                                <Boton
+                                    texto="Cancelar pedido"
+                                    variante="peligro"
+                                    onPress={() => confirmarCambio("Cancelado")}
+                                    deshabilitado={actualizando}
+                                />
+                            </View>
                         )}
                     </BarraInferior>
                 </>
@@ -197,5 +225,6 @@ const estilos = StyleSheet.create({
     texto: { fontSize: 14, color: colores.texto, flexShrink: 1, marginRight: 8 },
     nombre: { fontSize: 16, fontWeight: "700", color: colores.texto, marginBottom: 4 },
     total: { fontSize: 17, fontWeight: "700", color: colores.texto },
-    completo: { textAlign: "center", color: colores.exito, fontWeight: "600", paddingVertical: 8 }
+    completo: { textAlign: "center", color: colores.exito, fontWeight: "600", paddingVertical: 8 },
+    cancelado: { textAlign: "center", color: colores.error, fontWeight: "600", paddingVertical: 8 }
 });

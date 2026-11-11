@@ -10,11 +10,14 @@ import { ErrorNegocio, aObjectId } from "./ErrorNegocio";
 
 const METODOS_PAGO: MetodoPago[] = ["transferencia", "contra_entrega", "pasarela"];
 
-// Flujo permitido: Pendiente -> Pagado -> Enviado
+// Flujo permitido: Pendiente -> Pagado -> Enviado.
+// Un pedido se puede cancelar mientras no haya sido enviado (Pendiente o Pagado);
+// al cancelar, el stock de sus productos vuelve al inventario. Cancelado y Enviado son finales.
 const TRANSICIONES: Record<EstadoPedido, EstadoPedido[]> = {
-    Pendiente: ["Pagado"],
-    Pagado: ["Enviado"],
-    Enviado: []
+    Pendiente: ["Pagado", "Cancelado"],
+    Pagado: ["Enviado", "Cancelado"],
+    Enviado: [],
+    Cancelado: []
 };
 
 export interface ItemSolicitud {
@@ -98,10 +101,55 @@ export class PedidoNegocio {
         }
     }
 
-    private async reponerStock(items: ItemPedido[]): Promise<void> {
+    private async reponerStock(items: ItemPedido[], session?: ClientSession): Promise<void> {
         const col = await this.perfumes();
         for (const it of items) {
-            await col.updateOne({ _id: it.perfumeId }, { $inc: { stock: it.cantidad } });
+            await col.updateOne(
+                { _id: it.perfumeId },
+                { $inc: { stock: it.cantidad } },
+                { session }
+            );
+        }
+    }
+
+    // Cancela un pedido y devuelve su stock al inventario.
+    // El cambio de estado va PRIMERO y es condicional ("solo si sigue en el estado que leí"):
+    // si dos cancelaciones llegan a la vez, solo una gana y el stock se repone una sola vez.
+    private async cancelar(pedido: Pedido): Promise<void> {
+        const colPedidos = await this.pedidos();
+        const conflicto = () =>
+            new ErrorNegocio("El pedido cambió de estado. Actualiza e inténtalo de nuevo", 409);
+
+        if (this.usaTransacciones()) {
+            const session = await ConexionMongo.iniciarSesion();
+            try {
+                await session.withTransaction(async () => {
+                    const r = await colPedidos.updateOne(
+                        { _id: pedido._id, estado: pedido.estado },
+                        { $set: { estado: "Cancelado" as EstadoPedido } },
+                        { session }
+                    );
+                    if (r.modifiedCount === 0) throw conflicto();
+                    await this.reponerStock(pedido.items, session);
+                });
+            } finally {
+                await session.endSession();
+            }
+            return;
+        }
+
+        const r = await colPedidos.updateOne(
+            { _id: pedido._id, estado: pedido.estado },
+            { $set: { estado: "Cancelado" as EstadoPedido } }
+        );
+        if (r.modifiedCount === 0) throw conflicto();
+
+        try {
+            await this.reponerStock(pedido.items);
+        } catch (error) {
+            // Sin transacción: si falla la reposición, se deshace el cambio de estado
+            await colPedidos.updateOne({ _id: pedido._id }, { $set: { estado: pedido.estado } });
+            throw error;
         }
     }
 
@@ -205,6 +253,11 @@ export class PedidoNegocio {
                 409
             );
         }
+        if (nuevoEstado === "Cancelado") {
+            await this.cancelar(pedido);
+            return;
+        }
+
         const col = await this.pedidos();
         await col.updateOne(
             { _id: pedido._id, estado: pedido.estado },

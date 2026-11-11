@@ -20,7 +20,7 @@ import { mensajeDeError } from "../servicios/http";
 import { colores } from "../tema";
 import { codigoPedido, formatearFecha, formatearPrecio } from "../utilidades/formato";
 
-const FILTROS = ["Todos", "Pendiente", "Pagado", "Enviado"] as const;
+const FILTROS = ["Todos", "Pendiente", "Pagado", "Enviado", "Cancelado"] as const;
 type Filtro = (typeof FILTROS)[number];
 
 export function AdminPedidosPantalla() {

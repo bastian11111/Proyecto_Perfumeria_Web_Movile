@@ -3,7 +3,7 @@
 
 import { ObjectId } from "mongodb";
 
-export type EstadoPedido = "Pendiente" | "Pagado" | "Enviado";
+export type EstadoPedido = "Pendiente" | "Pagado" | "Enviado" | "Cancelado";
 export type MetodoPago = "transferencia" | "contra_entrega" | "pasarela";
 
 export class Cliente {

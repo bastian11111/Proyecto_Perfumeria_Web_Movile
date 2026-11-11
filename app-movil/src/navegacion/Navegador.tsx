@@ -10,6 +10,7 @@ import { AdminPedidoDetallePantalla } from "../pantallas/AdminPedidoDetallePanta
 import { AdminPedidosPantalla } from "../pantallas/AdminPedidosPantalla";
 import { AdminPerfumeFormPantalla } from "../pantallas/AdminPerfumeFormPantalla";
 import { AdminPerfumesPantalla } from "../pantallas/AdminPerfumesPantalla";
+import { AdminReportePantalla } from "../pantallas/AdminReportePantalla";
 import { CarritoPantalla } from "../pantallas/CarritoPantalla";
 import { CatalogoPantalla } from "../pantallas/CatalogoPantalla";
 import { CheckoutPantalla } from "../pantallas/CheckoutPantalla";
@@ -92,6 +93,9 @@ export function Navegador() {
                 break;
             case "adminPedidoDetalle":
                 pantalla = <AdminPedidoDetallePantalla pedidoId={actual.pedidoId} />;
+                break;
+            case "adminReporte":
+                pantalla = <AdminReportePantalla />;
                 break;
         }
     }
